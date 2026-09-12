@@ -1,10 +1,10 @@
 {
   "schema_version": "2",
   "source_info": {
-    "name": "猫窝",
-    "author": "EWEDL",
-    "homepage": "https://cn.bing.com/",
-    "description": "FnDepot 外部源 V2 单文件测试源"
+    "name": "yunchui",
+    "author": "yunchui",
+    "homepage": "https://github.com/yunchui/FnDepot",
+    "description": "yunchui 的飞牛第三方应用源（Hermes Studio 等）"
   },
   "apps": {
     "fntermx": {
