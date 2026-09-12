@@ -201,7 +201,7 @@
       "releases": {
         "0.7.19-1": {
           "changelog": "跟随官方 GitHub Release 预构建产物自动对齐 hermes-web-ui 版本。",
-          "updated_at": "2026-09-11T16:10:19+08:00",
+          "updated_at": "2026-09-11T08:10:19+08:00",
           "os_min_version": "1.0.0",
           "packages": {
             "all": {
