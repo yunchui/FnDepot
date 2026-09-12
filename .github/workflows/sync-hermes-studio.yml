@@ -1,0 +1,115 @@
+name: Sync Hermes Studio to FnDepot
+
+# 定时从 yunchui/Fnos-Hermes-Studio 抓取最新 Release 版本，
+# 自动更新本源 fnpack.json / fnpackv2.json 里 hermes-studio 的版本、
+# 下载地址、sha256 与大小，保证飞牛应用中心能发现新版本。
+# 也支持手动触发（workflow_dispatch）。
+on:
+  schedule:
+    - cron: '30 2 * * *'   # 每天 UTC 02:30（北京时间 10:30）
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync-hermes-studio:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.MY_PAT_TOKEN }}
+          ref: main
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Detect latest Hermes Studio release
+        id: detect
+        env:
+          GITHUB_TOKEN: ${{ secrets.MY_PAT_TOKEN }}
+        run: |
+          python3 - <<'PY'
+          import json, urllib.request, os, re
+          token = os.environ["GITHUB_TOKEN"]
+          def gh(u):
+              req = urllib.request.Request(u, headers={
+                  "Authorization": f"Bearer {token}",
+                  "Accept": "application/vnd.github+json",
+                  "User-Agent": "hermes-fndepot-sync"})
+              with urllib.request.urlopen(req, timeout=30) as r:
+                  return json.loads(r.read().decode())
+          rel = gh("https://api.github.com/repos/yunchui/Fnos-Hermes-Studio/releases/latest")
+          tag = rel.get("tag_name", "").lstrip("v")
+          assets = rel.get("assets", [])
+          if not assets:
+              raise SystemExit("ERROR: no release assets")
+          asset = assets[0]
+          digest = asset.get("digest", "").replace("sha256:", "")
+          info = {
+              "version": tag,
+              "download_url": asset["browser_download_url"],
+              "sha256": digest,
+              "size": asset["size"],
+              "published": rel.get("published_at") or asset.get("updated_at") or ""
+          }
+          with open("/tmp/release.json", "w") as f:
+              json.dump(info, f)
+          print("latest:", json.dumps(info, ensure_ascii=False))
+          PY
+
+      - name: Update fnpack.json
+        run: |
+          python3 - <<'PY'
+          import json
+          rel = json.load(open("/tmp/release.json"))
+          ver = rel["version"]
+          # fnpack.json（v2 结构）
+          with open("fnpack.json", encoding="utf-8") as f:
+              d = json.load(f)
+          apps = d.get("apps", {})
+          entry = apps.get("hermes-studio")
+          if not entry:
+              print("fnpack.json 无 hermes-studio 条目，跳过")
+          else:
+              # 版本形如 0.7.19-1（已是含 build 号的完整版）；最新 Release 的 tag 可能
+              # 是 v0.7.19-1。若 fnpack 里 release key 是 web-ui 版本 0.7.19，
+              # 则用 build 包版本。此处直接用 release tag。
+              releases = entry.setdefault("releases", {})
+              new_rel = {
+                  "changelog": "跟随官方 GitHub Release 预构建产物自动对齐 hermes-web-ui 版本。",
+                  "updated_at": rel["published"].replace("Z", "+08:00"),
+                  "os_min_version": "1.0.0",
+                  "packages": {
+                      "all": {
+                          "download_url": rel["download_url"],
+                          "sha256": rel["sha256"],
+                          "size": rel["size"]
+                      }
+                  }
+              }
+              if ver not in releases or releases[ver] != new_rel:
+                  releases[ver] = new_rel
+                  # 只保留最新一条，避免 fnpack 无限膨胀
+                  entry["releases"] = {ver: new_rel}
+                  with open("fnpack.json", "w", encoding="utf-8") as f:
+                      json.dump(d, f, ensure_ascii=False, indent=2)
+                  print("fnpack.json 已更新到", ver)
+              else:
+                  print("fnpack.json 已是最新", ver)
+          PY
+
+      - name: Commit and push
+        run: |
+          if git diff --quiet; then
+            echo "无变更，跳过提交"
+            exit 0
+          fi
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git add fnpack.json
+          git commit -m "🤖 自动同步 Hermes Studio 至 $(python3 -c 'import json;print(json.load(open(\"/tmp/release.json\"))[\"version\"])')"
+          git push origin main

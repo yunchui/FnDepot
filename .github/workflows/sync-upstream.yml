@@ -1,0 +1,42 @@
+name: Sync upstream FnDepot
+
+# 定时把上游 EWEDLCM/FnDepot 的更新同步到本 fork。
+# 也支持手动触发（workflow_dispatch）。
+on:
+  schedule:
+    - cron: '0 3 * * *'   # 每天 UTC 03:00（北京时间 11:00）检查上游
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync-upstream:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout fork
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.MY_PAT_TOKEN }}
+          ref: main
+
+      - name: Add upstream remote and fetch
+        run: |
+          git remote add upstream https://github.com/EWEDLCM/FnDepot.git
+          git fetch upstream main
+
+      - name: Merge upstream into local master
+        run: |
+          if git merge-base --is-ancestor upstream/main HEAD; then
+            echo "本 fork 已包含上游全部提交，无需合并。"
+          else
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git config user.name "github-actions[bot]"
+            git merge upstream/main -m "🔀 同步上游 EWEDLCM/FnDepot 更新"
+            git push origin main
+            echo "已合并并推送上游更新。"
+          fi
+
+      - name: Report
+        run: echo "上游同步检查完成。"

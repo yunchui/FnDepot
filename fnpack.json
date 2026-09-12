@@ -10,8 +10,12 @@
     "fntermx": {
       "display_name": "FntermX 终端",
       "desc": "一款支持持久化、本地终端和远程 SSH 连接管理的终端应用。",
-      "platform": ["x86"],
-      "categories": ["系统工具"],
+      "platform": [
+        "x86"
+      ],
+      "categories": [
+        "系统工具"
+      ],
       "icon_url": "./fntermx/ICON.PNG",
       "preview_urls": [
         "./fntermx/Preview/1.png",
@@ -60,8 +64,12 @@
     "picoclaw": {
       "display_name": "PicoClaw",
       "desc": "皮皮虾，超轻量级个人 AI 助手，支持多种 LLM 提供商，比小龙虾更小、更轻快、更安全。",
-      "platform": ["all"],
-      "categories": ["AI赋能"],
+      "platform": [
+        "all"
+      ],
+      "categories": [
+        "AI赋能"
+      ],
       "icon_url": "./picoclaw/ICON.PNG",
       "preview_urls": [
         "./picoclaw/Preview/1.png",
@@ -96,8 +104,12 @@
     "flatcms": {
       "display_name": "FlatCMS-极速建站",
       "desc": "极速创建和管理个人网站，支持三级目录导航、移动端管理、多语言、Markdown 导入和 ZIP 离线备份。",
-      "platform": ["x86"],
-      "categories": ["编程开发"],
+      "platform": [
+        "x86"
+      ],
+      "categories": [
+        "编程开发"
+      ],
       "icon_url": "./flatcms/ICON.PNG",
       "readme_url": "./flatcms/README.md",
       "bug_report_url": "https://github.com/EWEDLCM/FnDepot/issues",
@@ -126,8 +138,12 @@
     "flatnas": {
       "display_name": "FlatNas导航",
       "desc": "支持多端同步的个人导航页与仪表盘，提供文件传输、备忘录、RSS、日历、天气和待办等组件。",
-      "platform": ["all"],
-      "categories": ["生活服务"],
+      "platform": [
+        "all"
+      ],
+      "categories": [
+        "生活服务"
+      ],
       "icon_url": "./flatnas/ICON.PNG",
       "preview_urls": [
         "./flatnas/Preview/1.png",
@@ -153,6 +169,45 @@
               "download_url": "./flatnas/flatnas.fpk",
               "sha256": "15e632e47bee76c6c236460257361ca610a1ac47d3c267ba97bf37ae9f1f8c8b",
               "size": 221064
+            }
+          }
+        }
+      }
+    },
+    "hermes-studio": {
+      "display_name": "Hermes Studio",
+      "desc": "🐴Hermes Studio 是 Hermes Agent 的桌面 / Web 控制台与本地运行时。Agent 对话、可视化工作流、模型与 Profile 管理、网页浏览、Coding Agent 和本地运行环境都在一个界面中完成。",
+      "platform": [
+        "all"
+      ],
+      "categories": [
+        "AI",
+        "系统工具"
+      ],
+      "icon_url": "./hermes-studio/ICON.PNG",
+      "preview_urls": [
+        "./hermes-studio/preview/preview.png"
+      ],
+      "readme_url": "./hermes-studio/README.md",
+      "bug_report_url": "https://github.com/yunchui/FnDepot/issues",
+      "maintainer": "EKKOLearnAI",
+      "maintainer_url": "https://github.com/EKKOLearnAI/hermes-studio",
+      "distributor": "yunchui",
+      "distributor_url": "https://github.com/yunchui/FnDepot",
+      "run_as": "package",
+      "install_type": "存储空间",
+      "is_docker": false,
+      "service_port": "8648",
+      "releases": {
+        "0.7.19-1": {
+          "changelog": "跟随官方 GitHub Release 预构建产物自动对齐 hermes-web-ui 版本。",
+          "updated_at": "2026-09-11T16:10:19+08:00",
+          "os_min_version": "1.0.0",
+          "packages": {
+            "all": {
+              "download_url": "https://github.com/yunchui/Fnos-Hermes-Studio/releases/download/v0.7.19-1/fnos-hermes-studio_v0.7.19-1.fpk",
+              "sha256": "a285a424cae8896ef19247d0a89f4feca457c21aac9f34fb2cf0d879167a47d5",
+              "size": 328415878
             }
           }
         }
