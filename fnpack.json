@@ -200,8 +200,8 @@
       "service_port": "8648",
       "releases": {
         "0.7.19-3": {
-          "changelog": "跟随官方 GitHub Release 预构建产物自动对齐 hermes-web-ui 版本。\nHermes Studio for fnOS — 稳定版 v0.7.19-3（hermes-web-ui 0.7.19 / hermes-agent v2026.9.11），发布者改为 yunchui。",
-          "updated_at": "2026-09-12T17:57:24+08:00",
+          "changelog": "跟随官方 GitHub Release 预构建产物自动对齐 hermes-web-ui 版本。",
+          "updated_at": "2026-09-12T09:57:24+08:00",
           "os_min_version": "1.0.0",
           "packages": {
             "all": {
