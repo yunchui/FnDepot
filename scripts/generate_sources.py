@@ -9,8 +9,21 @@ if not GITHUB_TOKEN:
     print("错误：未找到 GITHUB_TOKEN 环境变量！")
     exit(1)
 
-MAX_FILE_SIZE = 2 * 1024 * 1024
-DEAD_REPO_MONTHS = 6
+# ================= 配置区 =================
+MAX_FILE_SIZE = 2 * 1024 * 1024  # 文件大小上限 2MB
+DEAD_REPO_MONTHS = 6             # 拦截超过 6 个月未更新的死仓库
+
+# 🚫 黑名单列表：在这里填入你想要强行排除的仓库名（格式："作者名/仓库名"）
+# 只要在这个列表里，脚本连看都不会看它一眼，直接丢弃。
+BLACKLIST = [
+    "Brian099/fn_fpk_packages",
+]
+
+# ✅ 白名单列表：防 GitHub 搜索漏抓（格式："作者名/仓库名"）
+# 只要在这个列表里，无视 GitHub 搜索结果，强行拉取质检！
+WHITELIST = [
+]
+# ==========================================
 
 HEADERS = {
     "Authorization": f"Bearer {GITHUB_TOKEN}",
@@ -109,12 +122,11 @@ def fetch_repo_data(full_name):
                 
             print(f"  [✓] 质检通过！提取到 {len(names)} 个应用指纹。")
             
-            # 整理返回该源的全部血缘与指纹信息
             return {
                 "full_name": full_name,
                 "is_fork": repo_meta.get("fork", False),
                 "parent": repo_meta.get("parent", {}).get("full_name") if repo_meta.get("fork", False) else None,
-                "created_at": repo_meta.get("created_at"), # 用于决胜负
+                "created_at": repo_meta.get("created_at"),
                 "names": names,
                 "sigs": sigs
             }
@@ -132,7 +144,7 @@ def calc_overlap(set1, set2):
 def process_overlap(repos):
     """第2阶段：血缘与重复剔除逻辑 (O(N^2) 对撞)"""
     print("\n[第2阶段: 查重] 开始执行血缘判定与重复源剔除...")
-    eliminated = set() # 记录战败被禁用的仓库全名
+    eliminated = set() 
     
     for i in range(len(repos)):
         repoA = repos[i]
@@ -142,11 +154,9 @@ def process_overlap(repos):
             repoB = repos[j]
             if repoB["full_name"] in eliminated: continue
                 
-            # 计算重叠率
             name_rate = calc_overlap(repoA["names"], repoB["names"])
             sig_rate = calc_overlap(repoA["sigs"], repoB["sigs"])
             
-            # 血缘判定：是否属于同一家族 (A是B的fork，或B是A的fork，或同宗)
             is_related = False
             if repoA["parent"] == repoB["full_name"] or repoB["parent"] == repoA["full_name"]:
                 is_related = True
@@ -155,25 +165,18 @@ def process_overlap(repos):
                 
             is_high_risk = False
             
-            # 判定门槛
             if is_related:
-                # 同血缘确认 + 一方是 Fork：≥80% (名称) 或 ≥40% (精确)
                 if name_rate >= 0.80 or sig_rate >= 0.40:
                     is_high_risk = True
             else:
-                # 无 Fork 身份（普通重复）：≥85% (名称) 且 ≥70% (精确)
                 if name_rate >= 0.85 and sig_rate >= 0.70:
                     is_high_risk = True
                     
             if is_high_risk:
-                # 裁决：谁是被禁的那个
                 loser = None
-                
-                # 规则1: Fork 特权覆盖默认 (Fork 永远输给上游原创)
                 if is_related and repoA["is_fork"] != repoB["is_fork"]:
                     loser = repoA if repoA["is_fork"] else repoB
                 else:
-                    # 规则2: 默认：后来者输 (比较 created_at 字符串)
                     loser = repoA if repoA["created_at"] > repoB["created_at"] else repoB
                 
                 eliminated.add(loser["full_name"])
@@ -184,7 +187,6 @@ def process_overlap(repos):
                 print(f"         胜出者 (保留): {winner_name}")
                 print(f"         战败者 (剔除): {loser['full_name']}")
                 
-                # 一旦 A 被淘汰，无需再拿 A 和剩下的比对
                 if loser == repoA:
                     break 
 
@@ -194,14 +196,33 @@ def main():
     print("开始获取候选名单...")
     candidate_repos = []
     
+    # 1. 执行盲搜
     data1 = query_github_api("https://api.github.com/search/code?q=filename:fnpack.json&per_page=100")
     if data1: candidate_repos.extend([item["repository"]["full_name"] for item in data1.get("items", [])])
     
     data2 = query_github_api("https://api.github.com/search/code?q=filename:fnpack.json+fork:true&per_page=100")
     if data2: candidate_repos.extend([item["repository"]["full_name"] for item in data2.get("items", [])])
     
+    # 2. 强行合并白名单
+    candidate_repos.extend(WHITELIST)
+    
+    # 3. 去重
     candidate_repos = list(set(candidate_repos))
-    print(f"共发现 {len(candidate_repos)} 个候选仓库。")
+    
+    # 4. 执行黑名单剔除 (为了防止大小写填错，全部转小写比对)
+    blacklist_lower = [r.lower() for r in BLACKLIST]
+    filtered_repos = []
+    blocked_count = 0
+    for repo in candidate_repos:
+        if repo.lower() in blacklist_lower:
+            blocked_count += 1
+            print(f"  [黑名单] 已剔除违规/受限仓库: {repo}")
+        else:
+            filtered_repos.append(repo)
+            
+    candidate_repos = filtered_repos
+
+    print(f"共发现 {len(candidate_repos)} 个候选仓库 (已过滤 {blocked_count} 个黑名单源)。")
 
     # 第一阶段：质检与提取
     valid_repo_objs = []
