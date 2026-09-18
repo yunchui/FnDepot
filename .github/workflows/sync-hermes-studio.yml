@@ -1,13 +1,24 @@
 name: Sync Hermes Studio to FnDepot
 
 # 定时从 yunchui/Fnos-Hermes-Studio 抓取最新 Release 版本，
-# 自动更新本源 fnpack.json / fnpackv2.json 里 hermes-studio 的版本、
-# 下载地址、sha256 与大小，保证飞牛应用中心能发现新版本。
+# 自动更新本源 fnpack.json 里 hermes-studio 的版本、下载地址、
+# sha256 与大小，保证飞牛应用中心能发现新版本。
 # 也支持手动触发（workflow_dispatch）。
+#
+# 2026-09-18 加固：
+#   - 每 6 小时同步一次，缩小「FPK 被重传后源里 digest 过旧」的窗口
+#   - 空 digest / 找不到 FPK 资产时直接失败，绝不写入坏校验值
+#   - 精确匹配 fnos-hermes-studio_v*.fpk，不依赖 assets[0]
 on:
   schedule:
-    - cron: '30 2 * * *'   # 每天 UTC 02:30（北京时间 10:30）
+    - cron: '30 */6 * * *'   # 每 6 小时：UTC 02:30/08:30/14:30/20:30 = 北京 10:30/16:30/20:30/04:30
   workflow_dispatch:
+    inputs:
+      force:
+        description: '强制覆盖已有版本的 sha256/size（即使内容未变）'
+        required: false
+        default: 'false'
+        type: boolean
 
 permissions:
   contents: write
@@ -45,16 +56,23 @@ jobs:
           rel = gh("https://api.github.com/repos/yunchui/Fnos-Hermes-Studio/releases/latest")
           tag = rel.get("tag_name", "").lstrip("v")
           assets = rel.get("assets", [])
-          if not assets:
-              raise SystemExit("ERROR: no release assets")
-          asset = assets[0]
-          digest = asset.get("digest", "").replace("sha256:", "")
+          # 精确匹配 FPK，而不是盲目取 assets[0]（filter out 其他附带产物）
+          fpk = None
+          for a in assets:
+              if a.get("name", "").startswith("fnos-hermes-studio_") and a.get("name", "").endswith(".fpk"):
+                  fpk = a
+                  break
+          if not fpk:
+              raise SystemExit("ERROR: release %s 无 fnos-hermes-studio_*.fpk 资产" % tag)
+          digest = fpk.get("digest", "").replace("sha256:", "").strip()
+          if not digest:
+              raise SystemExit("ERROR: FPK 资产 digest 为空，拒绝写入坏校验值")
           info = {
               "version": tag,
-              "download_url": asset["browser_download_url"],
+              "download_url": fpk["browser_download_url"],
               "sha256": digest,
-              "size": asset["size"],
-              "published": rel.get("published_at") or asset.get("updated_at") or ""
+              "size": fpk["size"],
+              "published": rel.get("published_at") or fpk.get("updated_at") or ""
           }
           with open("/tmp/release.json", "w") as f:
               json.dump(info, f)
@@ -62,44 +80,42 @@ jobs:
           PY
 
       - name: Update fnpack.json
+        env:
+          FORCE: ${{ inputs.force || 'false' }}
         run: |
           python3 - <<'PY'
-          import json
+          import json, os
           rel = json.load(open("/tmp/release.json"))
           ver = rel["version"]
-          # fnpack.json（v2 结构）
+          force = os.environ.get("FORCE", "false").lower() in ("true", "1", "yes")
           with open("fnpack.json", encoding="utf-8") as f:
               d = json.load(f)
-          apps = d.get("apps", {})
-          entry = apps.get("hermes-studio")
+          entry = (d.get("apps") or {}).get("hermes-studio")
           if not entry:
               print("fnpack.json 无 hermes-studio 条目，跳过")
-          else:
-              # 版本形如 0.7.19-1（已是含 build 号的完整版）；最新 Release 的 tag 可能
-              # 是 v0.7.19-1。若 fnpack 里 release key 是 web-ui 版本 0.7.19，
-              # 则用 build 包版本。此处直接用 release tag。
-              releases = entry.setdefault("releases", {})
-              new_rel = {
-                  "changelog": "跟随官方 GitHub Release 预构建产物自动对齐 hermes-web-ui 版本。",
-                  "updated_at": rel["published"].replace("Z", "+08:00"),
-                  "os_min_version": "1.0.0",
-                  "packages": {
-                      "all": {
-                          "download_url": rel["download_url"],
-                          "sha256": rel["sha256"],
-                          "size": rel["size"]
-                      }
+              raise SystemExit(0)
+          new_rel = {
+              "changelog": "跟随官方 GitHub Release 预构建产物自动对齐 hermes-web-ui 版本。",
+              "updated_at": rel["published"].replace("Z", "+08:00") if rel["published"] else "",
+              "os_min_version": "1.0.0",
+              "packages": {
+                  "all": {
+                      "download_url": rel["download_url"],
+                      "sha256": rel["sha256"],
+                      "size": rel["size"]
                   }
               }
-              if ver not in releases or releases[ver] != new_rel:
-                  releases[ver] = new_rel
-                  # 只保留最新一条，避免 fnpack 无限膨胀
-                  entry["releases"] = {ver: new_rel}
-                  with open("fnpack.json", "w", encoding="utf-8") as f:
-                      json.dump(d, f, ensure_ascii=False, indent=2)
-                  print("fnpack.json 已更新到", ver)
-              else:
-                  print("fnpack.json 已是最新", ver)
+          }
+          releases = entry.setdefault("releases", {})
+          changed = force or ver not in releases or releases.get(ver) != new_rel
+          if changed:
+              # 只保留最新一条，避免 fnpack 无限膨胀
+              entry["releases"] = {ver: new_rel}
+              with open("fnpack.json", "w", encoding="utf-8") as f:
+                  json.dump(d, f, ensure_ascii=False, indent=2)
+              print("fnpack.json 已更新到", ver, "(force=%s)" % force)
+          else:
+              print("fnpack.json 已是最新", ver)
           PY
 
       - name: Commit and push
