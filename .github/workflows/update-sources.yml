@@ -12,6 +12,9 @@ jobs:
     steps:
       - name: 检出当前仓库代码
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.MY_PAT_TOKEN }}
+          ref: main
 
       - name: 设置 Python 环境
         uses: actions/setup-python@v5
